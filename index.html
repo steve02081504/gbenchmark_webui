@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html style="height: 100%">
+<head>
+	<meta charset="utf-8">
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts@5.4.0/dist/echarts.min.js"></script>
+	<!-- Uncomment this line if you want to dataTool extension
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts@5.4.0/dist/extension/dataTool.min.js"></script>
+	-->
+	<!-- Uncomment this line if you want to use gl extension
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts-gl@2/dist/echarts-gl.min.js"></script>
+	-->
+	<!-- Uncomment this line if you want to echarts-stat extension
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts-stat@latest/dist/ecStat.min.js"></script>
+	-->
+	<!-- Uncomment this line if you want to use map
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts@4.9.0/map/js/china.js"></script>
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts@4.9.0/map/js/world.js"></script>
+	-->
+	<!-- Uncomment these two lines if you want to use bmap extension
+	<script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=YOUR_API_KEY"></script>
+	<script type="text/javascript" src="https://fastly.jsdelivr.net/npm/echarts@5.4.0/dist/extension/bmap.min.js"></script>
+	-->
+</head>
+<body style="height: 100%; margin: 0">
+	<!-- 居中大字让用户拖放benchmark的json -->
+	<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 30px" id="drop_text">
+		<div>拖放benchmark的json</div>
+	</div>
+
+	<!-- 可以操作内容和捕获所选项的，可以展开和折叠的列表，放在页面顶端 -->
+	<select id="select">
+	</select>
+	<script type="text/javascript">
+		var ChangeChartsShowing;//function(name)
+		SelectOptions = [];
+		var AddSelectOption= function(name){
+			let select = document.getElementById("select");
+			let option = document.createElement("option");
+			SelectOptions.push(option);
+			option.value = name;
+			option.text = name;
+			select.appendChild(option);
+		}
+		var AddSelectOptionIfNotExist = function(name){
+			if(SelectOptions.find(function(option){return option.value == name}) == undefined){
+				AddSelectOption(name);
+			}
+		}
+		//set the select onchange function
+		document.getElementById("select").onchange = function(){
+			ChangeChartsShowing(this.value);
+		}
+	</script>
+
+
+	<!-- 一段显示基础信息的文本 -->
+	<div id="info" style="height: 240px">
+	</div>
+	<br>
+	<script type="text/javascript">
+		var InfoOption={
+			graphic: {
+				elements: [
+					{
+						type: 'text',
+						left: '4%',
+						top: 'center',
+						style: {
+							text: '加载中',
+							fontSize: 16,
+							fontWeight: 'bold',
+							lineDash: [0, 200],
+							lineDashOffset: 0,
+							fill: 'transparent',
+							stroke: '#000',
+							lineWidth: 1
+						},
+						keyframeAnimation: {
+							duration: 3000,
+							keyframes: [
+								{
+									percent: 0.7,
+									style: {
+										fill: 'transparent',
+										lineDashOffset: 200,
+										lineDash: [200, 0]
+									}
+								},
+								{
+									percent: 0.8,
+									style: {
+										fill: 'transparent'
+									}
+								},
+								{
+									percent: 1,
+									style: {
+										fill: 'black'
+									}
+								}
+							]
+						}
+					}
+				]
+			}
+		};
+		var InfoContainer=document.getElementById("info");
+		var InfoChart=echarts.init(InfoContainer);
+		var UpdateInfo=function(info){
+			InfoOption.graphic.elements[0].style.text=info;
+			InfoChart.setOption(InfoOption);
+		};
+	</script>
+
+
+	<script type="text/javascript">
+		//decl an let to save json data
+		let BenchmarkData = {};
+		let UpdateData;
+
+		self.ondragover = function(){
+			return false;
+		}
+		self.ondrop = function(){
+			//remove the drop text
+			document.getElementById("drop_text").remove();
+			//read if file is json
+			let reader = new FileReader();
+			reader.onload = function(){
+				//save json data
+				BenchmarkData = JSON.parse(reader.result);
+				console.log(BenchmarkData);
+				UpdateData();
+			}
+			reader.readAsText(self.event.dataTransfer.files[0]);
+			return false;
+		};
+	</script>
+
+	<script type="text/javascript">
+		var Charts=[];
+		var ChartsOption=[];
+		var Containers=[];
+
+		var addContainer = function(width,height){
+			if(width==undefined)
+				width="97%";
+			if(height==undefined)
+				height="100%";
+			let container = document.createElement("div");
+			container.style.width = width;
+			container.style.height = height;
+			document.body.appendChild(container);
+			Containers.push(container);
+			return container;
+		}
+		var ClearContainer = function(){
+			//claer all charts
+			for(let i=0;i<Charts.length;i++){
+				Charts[i].dispose();
+			}
+			//clear all container
+			for(let i=0;i<Containers.length;i++){
+				document.body.removeChild(Containers[i]);
+			}
+			//clear window EventListener of all charts
+			for(let i=0;i<Charts.length;i++){
+				window.removeEventListener("resize",Charts[i].resize);
+			}
+			Charts=[];
+			ChartsOption=[];
+			Containers=[];
+		}
+		var addChart = function(dim, option){
+			if(option == undefined){
+				option = {
+					title: {
+						text: 'a title'
+					},
+					tooltip: {
+						trigger: 'axis',
+						axisPointer: {
+							type: 'shadow'
+						}
+					},
+					legend: {},
+					grid: {
+						left: '3%',
+						right: '4%',
+						bottom: '3%',
+						containLabel: true
+					},
+					xAxis: {
+						type: 'value',
+						boundaryGap: [0, 0.01]
+					},
+					yAxis: {
+						type: 'category',
+						data: []
+					},
+					series: []
+				};
+			}
+			let chart = echarts.init(dim);
+			Charts.push(chart);
+			ChartsOption.push(option);
+			window.addEventListener('resize', chart.resize);
+		}
+
+		var TestArrays = [];
+		var TestNames = [];
+		var TestDatas = [];
+
+		//define a struct that has 3 strings
+		var split_test_name = function(somename){
+			let result = {
+				array:'',
+				name:'',
+				subname:''
+			};
+			result.array = somename.split("_")[0];
+			let others=somename.substring(result.array.length+1);
+			result.name = others.split("/")[0];
+			result.subname = others.split("/")[1];
+			if(result.subname === undefined){
+				let temp = others.split("<")[0].split("_");
+				let check_name = temp.slice(0,temp.length-1).join("_");
+				if(check_name && others!=check_name && TestNames.indexOf(check_name)!=-1){
+					result.name = check_name;
+					result.subname = others.substring(check_name.length+1);
+				}
+				else if(others.endsWith(">")){
+					result.name = others.split("<")[0];
+					result.subname = others.split("<")[1].split(">")[0];
+				}
+				else
+					result.subname = "";
+			}
+			return result;
+		}
+
+		UpdateData=function(){
+			ClearContainer();
+			//update info
+			let info="benchmark "+BenchmarkData.context.executable+"\n";
+			info+="at "+BenchmarkData.context.date+"\n";
+			info+="on "+BenchmarkData.context.host_name+"\n";
+			info+="with "+BenchmarkData.context.num_cpus+" * "+BenchmarkData.context.mhz_per_cpu+" MHz cpus\n";
+			info+="and "+BenchmarkData.context.caches.length+" level of cache\n";
+			for(let i=0;i<BenchmarkData.context.caches.length;i++){
+				let cache_info = BenchmarkData.context.caches[i];
+				info+="level "+cache_info.level+" cache("+cache_info.type+") has "+cache_info.size+" bytes and "+cache_info.num_sharing+" sharing\n";
+			}
+			UpdateInfo(info);
+			//get tests's name
+			BenchmarkData.benchmarks.map(function (item) {
+				let result = split_test_name(item.name);
+				TestArrays.push(result.array);
+				TestNames.push(result.name);
+			});
+			//get the unique TestArrays
+			TestArrays = TestArrays.filter(function (item, index, array) {
+				return array.indexOf(item) === index;
+			});
+			//get the unique TestNames
+			TestNames = TestNames.filter(function (item, index, array) {
+				return array.indexOf(item) === index;
+			});
+			//for each TestName, create a Chart
+			for(let i=0;i<TestNames.length;i++){
+				addChart(addContainer());
+				let index=i;
+				let Chart=Charts[index];
+				let ChartOption=ChartsOption[index];
+				let ChartTitle=TestNames[i];
+				ChartOption.title.text = ChartTitle;
+				TestDatas.push({});
+				let TestData=TestDatas[index];
+				let TestSubNames = [];
+				let BenchMarkDatas = [];
+				//get the names and datas of this TestName
+				for(let j=0;j<BenchmarkData.benchmarks.length;j++){
+					let result = split_test_name(BenchmarkData.benchmarks[j].name);
+					let TestName = result.name;
+					let TestSubName = result.subname;
+					if(TestName==ChartTitle){
+						TestSubNames.push(TestSubName);
+						BenchMarkDatas.push(BenchmarkData.benchmarks[j]);
+					}
+				}
+				//unique TestSubName
+				TestSubNames = TestSubNames.filter(function (item, index, array) {
+					return array.indexOf(item) === index;
+				});
+				//for each datas, build and push data to ChartOption.series base on TestArray & TestSubName
+				BenchMarkDatas.forEach(function (item) {
+					let result = split_test_name(item.name);
+					let TestArray = result.array;
+					let TestSubName = result.subname;
+					let index = TestArrays.indexOf(TestArray);
+					item.index = index;
+					let subindex = TestSubNames.indexOf(TestSubName);
+					item.subindex = subindex;
+				});
+				//set TestDatas.time_unit as datas[0].time_unit
+				TestData.time_unit = BenchMarkDatas[0].time_unit;
+				TestData.SubNames=TestSubNames;
+				TestData.BenchMarkDatas=BenchMarkDatas;
+			}
+			ChangeChartsShowing('real_time');
+		}
+		ChangeChartsShowing = function(name){
+			for(let i=0;i<TestNames.length;i++){
+				let index=i;
+				let ChartOption=ChartsOption[index];
+				let TestData=TestDatas[index];
+				let BenchMarkDatas=TestData.BenchMarkDatas;
+				let TestSubNames=TestData.SubNames;
+				ChartOption.yAxis.data = TestSubNames;
+				if(name=='cpu_time' || name=='real_time'){
+					for(let j=0;j<TestArrays.length;j++){
+						ChartOption.series[j]={
+							name: TestArrays[j],
+							data: [],
+							type: 'bar',
+							backgroundStyle: {
+								color: 'rgba(180, 180, 180, 0.2)'
+							}
+						};
+						//make option.series[j].data has size of TestSubName
+						for(let k=0;k<TestSubNames.length;k++){
+							ChartOption.series[j].data.push(NaN);
+						}
+					}
+					BenchMarkDatas.forEach(function (item) {
+						let index = item.index;
+						let subindex = item.subindex;
+						if(item[name]!==undefined)
+							ChartOption.series[index].data[subindex]=item[name];
+					});
+					ChartOption.xAxis.axisLabel = {
+						formatter: '{value}'+TestData.time_unit
+					};
+					//for each ChartOption.series, if all data is NaN, remove it
+					for(let j=ChartOption.series.length-1;j>=0;j--){
+						let rmflag=true;
+						for(let k=0;k<ChartOption.series[j].data.length;k++){
+							if(!isNaN(ChartOption.series[j].data[k])){
+								rmflag=false;
+								break;
+							}
+						}
+						if(rmflag){
+							ChartOption.series.splice(j,1);
+						}
+					}
+					//计算表格的高
+					let height = 80 + 17 * BenchMarkDatas.length;
+					//设置表格的高
+					Containers[index].style.height = height + "px";
+				}
+				else{//alart not support
+					alert('not support');
+					return;
+				}
+			}
+			//for each Chart, set option in ChartOption
+			Charts.forEach(function (item,index) {
+				item.resize();
+				item.setOption(ChartsOption[index]);
+			});
+		}
+	</script>
+
+	<script type="text/javascript">
+		//check if the has args for the json file url
+		if (window.location.search) {
+			//split the url to get args map
+			let args = window.location.search.substring(1).split("&");
+			let argsMap = {};
+			for (let i = 0; i < args.length; i++) {
+				let arg = args[i].split("=");
+				argsMap[arg[0]] = arg[1];
+			}
+			//get the json file url
+			let url = argsMap["file"];
+			//encode the url
+			url = decodeURIComponent(url);
+			//load the json file from url useing react
+			fetch(url,{
+				method: 'GET',
+				mode: 'cors',
+			}).then(function (response) {
+				//if response.type is "cors", get the json file from response.body as ReadableStream
+				if (response.type === "cors") {
+					//ReadableStream init
+					const reader = response.body.getReader();
+					//buffer init
+					let buffer = "";
+					//set drop_text to loading
+					document.getElementById("drop_text").innerHTML = "loading";
+					//ReadableStream read to BenchmarkData as JSON
+					reader.read().then(function processText({ done, value }) {
+						if (done) {
+							//if ReadableStream read done, set BenchmarkData
+							BenchmarkData = JSON.parse(buffer);
+							//remove the drop text
+							document.getElementById("drop_text").remove();
+							//call the update function
+							UpdateData();
+							//disable D&D
+							document.ondragover = function (e) {
+								e.preventDefault();
+							};
+							document.ondrop = function (e) {
+								e.preventDefault();
+							};
+							return;
+						}
+						//decode the ReadableStream to string
+						let text = new TextDecoder("utf-8").decode(value);
+						//log the text
+						console.log(text);
+						//append the text to buffer
+						buffer += text;
+						//read next
+						return reader.read().then(processText);
+					});
+					//if drop_text is not null, set drop_text to loadingfailed
+					let drop_text = document.getElementById("drop_text");
+					if (drop_text !== null) {
+						drop_text.innerHTML = "loading failed";
+					}
+				}
+			});
+		}
+	</script>
+</body>
+</html>
