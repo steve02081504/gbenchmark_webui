@@ -233,8 +233,20 @@
 					result.name = others.split("<")[0];
 					result.subname = others.split("<")[1].split(">")[0];
 				}
-				else
+				else{
 					result.subname = "";
+					//for each TestNames, if somename is a substring of 'somename', then split as it
+					for(let i=0;i<TestNames.length;i++){
+						let check_name = TestNames[i];
+						let index = somename.indexOf(check_name);
+						if(index!=-1){
+							result.array = somename.substring(0,index-1);
+							result.name = check_name;
+							result.subname = somename.substring(index+check_name.length+1);
+							break;
+						}
+					}
+				}
 			}
 			return result;
 		}
