@@ -302,8 +302,11 @@
 					let subindex = TestSubNames.indexOf(TestSubName);
 					item.subindex = subindex;
 				});
-				//set TestDatas.time_unit as datas[0].time_unit
-				TestData.time_unit = BenchMarkDatas[0].time_unit;
+				//set TestDatas.time_unit as datas[0].time_unit, if it's not exist, set it as "ns"
+				if(BenchMarkDatas.length>0)
+					TestData.time_unit = BenchMarkDatas[0].time_unit;
+				if(TestData.time_unit === undefined)
+					TestData.time_unit = "ns";
 				TestData.SubNames=TestSubNames;
 				TestData.BenchMarkDatas=BenchMarkDatas;
 			}
