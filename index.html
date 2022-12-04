@@ -242,7 +242,9 @@
 						if(index!=-1){
 							result.array = somename.substring(0,index-1);
 							result.name = check_name;
-							result.subname = somename.substring(index+check_name.length+1);
+							result.subname = somename.substring(index+check_name.length);
+							if(result.subname.startsWith("_"))
+								result.subname = result.subname.substring(1);
 							break;
 						}
 					}
